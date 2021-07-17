@@ -1,6 +1,7 @@
 # GML-Classes
 
-An extension script for GML providing some OOP features.
+An extension script for GML providing some OOP features.  
+Works only in GameMaker Studio 2.3+
 
 ![example](https://marketplacecdn.yoyogames.com/images/assets/10050/screenshots/21295_original.png?1626456028)
 
