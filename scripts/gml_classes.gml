@@ -1,4 +1,4 @@
-// GML-Classes v1.0.0
+// GML-Classes v1.0.3
 // This script adds some OOP functionality that allows you to define classes,
 // their constructor and destructor, and call parent methods in overridden methods.
 // Developed by NikkoTC 2021.
@@ -10,6 +10,7 @@
 #macro extends ():
 #macro define ()constructor
 #macro register_as_super __gmlc_register_as_super
+#macro singleton __gmlc_singleton=true
 
 #endregion
 
@@ -22,40 +23,40 @@
 #macro __gmlc_methods_id_offset 100000
 #macro __gmlc_methods_id_offset_html5 0
 
-globalvar __gmlc_initialized; __gmlc_initialized = false;
-globalvar __gmlc_classes;
-globalvar __gmlc_methods;
-globalvar __gmlc_methods_id_offset_gvar;
-globalvar __gmcs_class_name_to_class_id;
+global.__gmlc_initialized = false;
+global.__gmlc_classes = [];
+global.__gmlc_methods = [];
+global.__gmlc_methods_id_offset_gvar = __gmlc_classes_id_offset;
+global.__gmcs_class_name_to_class_id = ds_map_create();
 
 function __gmlc_register_class_info(class_info)
 {
-	__gmlc_classes[class_info.class_id - __gmlc_classes_id_offset] = class_info;
-	__gmcs_class_name_to_class_id[? class_info.class_name ] = class_info.class_id;
+	global.__gmlc_classes[class_info.class_id - __gmlc_classes_id_offset] = class_info;
+	global.__gmcs_class_name_to_class_id[? class_info.class_name ] = class_info.class_id;
 }
 
 function __gmlc_register_method_info(method_info)
 {
 	gml_pragma("forceinline");
-	__gmlc_methods[method_info.method_id - __gmlc_methods_id_offset_gvar] = method_info;
+	global.__gmlc_methods[method_info.method_id - global.__gmlc_methods_id_offset_gvar] = method_info;
 }
 
 function __gmlc_get_class_info(class_id)
 {
 	gml_pragma("forceinline");
-	return __gmlc_classes[class_id - __gmlc_classes_id_offset];
+	return global.__gmlc_classes[class_id - __gmlc_classes_id_offset];
 }
 
 function __gmlc_get_method_info(method_id)
 {
 	gml_pragma("forceinline");
-	return __gmlc_methods[method_id - __gmlc_methods_id_offset_gvar];
+	return global.__gmlc_methods[method_id - global.__gmlc_methods_id_offset_gvar];
 }
 
 function __gmlc_register_as_super(parent)
 {
 	gml_pragma("forceinline");
-	__gmlc_super = parent;
+	global.__gmlc_super = parent;
 }
 
 function __gmlc_strange_fix_for_html5()
@@ -71,11 +72,11 @@ function __gmlc_init_classes()
 {
 	gml_pragma("global", "__gmlc_init_classes()");
 	
-	if(__gmlc_initialized)
+	if(global.__gmlc_initialized)
 	{
 		return;
 	}
-	__gmlc_initialized = true;
+	global.__gmlc_initialized = true;
 	
 	// prepare structures
 	var classes = [];
@@ -99,6 +100,7 @@ function __gmlc_init_classes()
 					class_name: global_var_name,
 					class_id: asset_get_index(global_var_name),
 					parent_id: undefined,
+					single: false,
 					constructor_method_id: undefined,
 					destructor_method_id: undefined,
 					method_ids: []
@@ -108,6 +110,9 @@ function __gmlc_init_classes()
 				
 				var class_var_names = variable_struct_get_names(class_inst);
 				var class_var_names_num = array_length(class_var_names);
+				
+				var single = false;
+				
 				for(var j=0; j<class_var_names_num; j++)
 				{
 					var class_var_name = class_var_names[j];
@@ -116,6 +121,10 @@ function __gmlc_init_classes()
 					if(!is_method(class_var_value) && class_var_name=="__gmlc_super")
 					{
 						class_info.parent_id = class_inst.__gmlc_super;
+					}
+					else if(!is_method(class_var_value) && class_var_name=="__gmlc_singleton")
+					{
+						class_info.single = class_inst.__gmlc_singleton;
 					}
 					else
 					{
@@ -133,7 +142,6 @@ function __gmlc_init_classes()
 				}
 				
 				array_push(classes, class_info);
-				
 				delete class_inst;
 			}
 		}
@@ -163,10 +171,9 @@ function __gmlc_init_classes()
 		}
 	}
 	
-	__gmlc_methods_id_offset_gvar = os_browser==browser_not_a_browser ? __gmlc_methods_id_offset : __gmlc_methods_id_offset_html5;
-	__gmcs_class_name_to_class_id = ds_map_create();
-	__gmlc_classes = array_create(classes_max_id + 1 - __gmlc_classes_id_offset, undefined);
-	__gmlc_methods = array_create(methods_max_id + 1 - __gmlc_methods_id_offset_gvar, undefined);
+	global.__gmlc_methods_id_offset_gvar = os_browser==browser_not_a_browser ? __gmlc_methods_id_offset : __gmlc_methods_id_offset_html5;
+	global.__gmlc_classes = array_create(classes_max_id + 1 - __gmlc_classes_id_offset, undefined);
+	global.__gmlc_methods = array_create(methods_max_id + 1 - global.__gmlc_methods_id_offset_gvar, undefined);
 	
 	for(var i=0; i<classes_num; i++)
 	{
@@ -277,11 +284,11 @@ function __gmlc_init_classes()
 		
 		if(parent_class_info==undefined)
 		{
-			show_debug_message("\tclass " + class_info.class_name );
+			show_debug_message("\tclass " + class_info.class_name + (class_info.single ? " [singleton]" : "") );
 		}
 		else
 		{
-			show_debug_message("\tclass " + class_info.class_name + " extends " + parent_class_info.class_name );
+			show_debug_message("\tclass " + class_info.class_name + " extends " + parent_class_info.class_name + (class_info.single ? " [singleton]" : "") );
 		}
 		
 		var method_ids = class_info.method_ids;
@@ -303,6 +310,20 @@ function __gmlc_init_classes()
 		
 		show_debug_message("");
 	}
+	
+	show_debug_message("GML-CLASSES init singletons:");
+	for(var i=0; i<classes_num; i++)
+	{
+		var class_info = classes[i];
+		if(class_info.single)
+		{
+			var globalvarName = class_info.class_name;
+			var singletonInst = create(class_info.class_id);
+			variable_global_set(globalvarName, singletonInst);
+			show_debug_message("\t" + globalvarName);
+		}
+	}
+	show_debug_message("");
 }
 
 #endregion
@@ -447,7 +468,7 @@ function is_class(val)
 {
 	return ( is_real(val)
 		&& val >= __gmlc_classes_id_offset
-		&& val < __gmlc_classes_id_offset + array_length(__gmlc_classes)
+		&& val < __gmlc_classes_id_offset + array_length(global.__gmlc_classes)
 		&&  __gmlc_get_class_info(val) != undefined
 	);
 }
@@ -471,7 +492,7 @@ function class_get_name(class_id)
 function find_class_by_name(class_name)
 {
 	gml_pragma("forceinline");
-	return __gmcs_class_name_to_class_id[? class_name];
+	return global.__gmcs_class_name_to_class_id[? class_name];
 }
 
 /// @function				inst_get_class(inst);
