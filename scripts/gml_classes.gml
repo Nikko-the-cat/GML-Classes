@@ -1,4 +1,4 @@
-// GML-Classes v1.0.3
+// GML-Classes v1.0.4
 // This script adds some OOP functionality that allows you to define classes,
 // their constructor and destructor, and call parent methods in overridden methods.
 // Developed by NikkoTC 2021.
@@ -56,7 +56,7 @@ function __gmlc_get_method_info(method_id)
 function __gmlc_register_as_super(parent)
 {
 	gml_pragma("forceinline");
-	global.__gmlc_super = parent;
+	__gmlc_super = parent;
 }
 
 function __gmlc_strange_fix_for_html5()
