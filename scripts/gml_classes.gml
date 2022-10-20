@@ -1,7 +1,7 @@
-// GML-Classes v1.0.4
+// GML-Classes v1.0.5
 // This script adds some OOP functionality that allows you to define classes,
 // their constructor and destructor, and call parent methods in overridden methods.
-// Developed by NikkoTC 2021.
+// Developed by NikkoTC 2022.
 // Documentation: https://github.com/Nikko-the-cat/GML-Classes/wiki
 
 #region gmlc_macroses
@@ -10,227 +10,283 @@
 #macro extends ():
 #macro define ()constructor
 #macro register_as_super __gmlc_register_as_super
-#macro singleton __gmlc_singleton=true
+#macro singleton __gmlc_register_as_singleton()
 
 #endregion
 
 #region gmlc_private
 
-#macro __gmlc_constructor_name "_constructor"
-#macro __gmlc_destructor_name "_destructor"
+global.gmlc = {
+	constructorName: "_constructor",
+	destructorName: "_destructor",
+	classesIDOffset: 100000,
+	methodsIDOffsetDefault: 100000,
+	methodsIDOffsetHTML5: 0,
+	
+	initialized: false,
+	classes: [],
+	methods: [],
+	methodsIDOffset: 100000,
+	classNameToClassID: ds_map_create()
+};
 
-#macro __gmlc_classes_id_offset 100000
-#macro __gmlc_methods_id_offset 100000
-#macro __gmlc_methods_id_offset_html5 0
+#macro GMLC global.gmlc
 
-global.__gmlc_initialized = false;
-global.__gmlc_classes = [];
-global.__gmlc_methods = [];
-global.__gmlc_methods_id_offset_gvar = __gmlc_classes_id_offset;
-global.__gmcs_class_name_to_class_id = ds_map_create();
-
-function __gmlc_register_class_info(class_info)
+/// @ignore
+/// @param {String} str
+/// @returns {Bool}
+function __gmlc_string_has_class_prefix(str)
 {
-	global.__gmlc_classes[class_info.class_id - __gmlc_classes_id_offset] = class_info;
-	global.__gmcs_class_name_to_class_id[? class_info.class_name ] = class_info.class_id;
+	// c_ or cls_ or cX, where X is any upper character
+	var c1 = string_char_at(str, 1);
+	var c2 = string_char_at(str, 2);
+	return (
+		( c1=="c" && (c2=="_" || c2==string_upper(c2)) ) ||
+		( c1=="c" && c2=="l" && string_char_at(str,3)=="s" && string_char_at(str,4)=="_")
+	);
 }
 
-function __gmlc_register_method_info(method_info)
+/// @ignore
+/// @param {Struct.GMLCClassInfo} classInfo
+function __gmlc_register_class_info(classInfo)
+{
+	GMLC.classes[classInfo.classID - GMLC.classesIDOffset] = classInfo;
+	GMLC.classNameToClassID[? classInfo.className ] = classInfo.classID;
+}
+
+/// @ignore
+/// @param {Struct.GMLCMethodInfo} methodInfo
+function __gmlc_register_method_info(methodInfo)
 {
 	gml_pragma("forceinline");
-	global.__gmlc_methods[method_info.method_id - global.__gmlc_methods_id_offset_gvar] = method_info;
+	GMLC.methods[methodInfo.methodID - GMLC.methodsIDOffset] = methodInfo;
 }
 
-function __gmlc_get_class_info(class_id)
+/// @ignore
+/// @param {Asset.GMScript} classID
+/// @returns {Struct.GMLCClassInfo,Undefined}
+function __gmlc_get_class_info(classID)
 {
 	gml_pragma("forceinline");
-	return global.__gmlc_classes[class_id - __gmlc_classes_id_offset];
+	return GMLC.classes[classID - GMLC.classesIDOffset];
 }
 
-function __gmlc_get_method_info(method_id)
+/// @ignore
+/// @param {Asset.GMScript} methodID
+/// @returns {Struct.GMLCMethodInfo,Undefined}
+function __gmlc_get_method_info(methodID)
 {
 	gml_pragma("forceinline");
-	return global.__gmlc_methods[method_id - global.__gmlc_methods_id_offset_gvar];
+	return GMLC.methods[methodID - GMLC.methodsIDOffset];
 }
 
+/// @ignore
+/// @param {Any} parent
 function __gmlc_register_as_super(parent)
 {
 	gml_pragma("forceinline");
-	__gmlc_super = parent;
+	gmlcSUPER = parent;
 }
 
-function __gmlc_strange_fix_for_html5()
+/// @ignore
+function __gmlc_register_as_singleton()
 {
-	function register_method() {}
+	gml_pragma("forceinline");
+	gmlcSINGLETON = true;
+}
+
+/// @ignore
+/// @param {Any} classID    The unique class ID.
+/// @returns {Struct}
+function __gmlc_create_inst(classID)
+{
+	gml_pragma("forceinline");
+	return new classID();
+}
+
+/// @ignore
+/// @returns {Struct,Id.Instance}
+function __gmlc_self_struct()
+{
+	gml_pragma("forceinline");
+	return self;
+}
+
+/// @ignore
+function __gmlc_constructor_and_destructor_highlight()
+{
 	function _constructor() {}
 	function _destructor() {}
-	register_method(_constructor);
-	register_method(_destructor);
 }
 
+/// @ignore
+/// @param {String} className
+function GMLCClassInfo(className) constructor
+{
+	self.className = className;
+	self.classID = asset_get_index(className);
+	self.parentClassID = undefined;
+	self.single = false;
+	self.constructorMethodID = undefined;
+	self.destructorMethodID = undefined;
+	self.methodIDs = [];
+}
+
+/// @ignore
+/// @param {String} methodName
+/// @param {Function} methodFunc
+function GMLCMethodInfo(methodName, methodFunc, parentMethodId=undefined) constructor
+{
+	self.methodName = methodName;
+	self.methodID = method_get_index(methodFunc);
+	self.methodFunc = methodFunc;
+	self.parentMethodID = parentMethodId;
+}
+
+/// @ignore
 function __gmlc_init_classes()
 {
 	gml_pragma("global", "__gmlc_init_classes()");
 	
-	if(global.__gmlc_initialized)
+	if(GMLC.initialized)
 	{
 		return;
 	}
-	global.__gmlc_initialized = true;
+	GMLC.initialized = true;
 	
 	// prepare structures
 	var classes = [];
 	var methods = [];
 	
-	var global_var_names = variable_instance_get_names(global);
-	var global_var_names_num = array_length(global_var_names);
-	for(var i=0; i<global_var_names_num; i++)
+	var globalVarNames = variable_struct_get_names(global);
+	var globalVarNamesNum = array_length(globalVarNames);
+	for(var i=0; i<globalVarNamesNum; i++)
 	{
-		var global_var_name = global_var_names[i];
-		var c1 = string_char_at(global_var_name, 1);
-		var c2 = string_char_at(global_var_name, 2);
-		
-		if(c1=="c" && (c2=="_" || c2==string_upper(c2)))
+		var globalVarName = globalVarNames[i];
+		if(__gmlc_string_has_class_prefix(globalVarName))
 		{
-			var global_var_value = variable_instance_get(global, global_var_name);
-			if(is_method(global_var_value))
+			var globalVarValue = variable_struct_get(global, globalVarName);
+			if(is_method(globalVarValue))
 			{
 				// class
-				var class_info = {
-					class_name: global_var_name,
-					class_id: asset_get_index(global_var_name),
-					parent_id: undefined,
-					single: false,
-					constructor_method_id: undefined,
-					destructor_method_id: undefined,
-					method_ids: []
-				};
+				var classInfo = new GMLCClassInfo(globalVarName);
 				
-				var class_inst = new global_var_value();
+				var classInst = new globalVarValue();
 				
-				var class_var_names = variable_struct_get_names(class_inst);
-				var class_var_names_num = array_length(class_var_names);
-				
-				var single = false;
-				
-				for(var j=0; j<class_var_names_num; j++)
+				var classVarNames = variable_struct_get_names(classInst);
+				var classVarNamesNum = array_length(classVarNames);
+				for(var j=0; j<classVarNamesNum; j++)
 				{
-					var class_var_name = class_var_names[j];
-					var class_var_value = variable_struct_get(class_inst, class_var_name);
+					var classVarName = classVarNames[j];
+					var classVarValue = variable_struct_get(classInst, classVarName);
 					
-					if(!is_method(class_var_value) && class_var_name=="__gmlc_super")
+					if(!is_method(classVarValue) && classVarName=="gmlcSUPER")
 					{
-						class_info.parent_id = class_inst.__gmlc_super;
+						classInfo.parentClassID = classInst.gmlcSUPER;
 					}
-					else if(!is_method(class_var_value) && class_var_name=="__gmlc_singleton")
+					else if(!is_method(classVarValue) && classVarName=="gmlcSINGLETON")
 					{
-						class_info.single = class_inst.__gmlc_singleton;
+						classInfo.single = classInst.gmlcSINGLETON;
 					}
 					else
 					{
 						// method
-						var method_info = {
-							method_name: class_var_name,
-							method_id: method_get_index(class_var_value),
-							method_func: class_var_value,
-							parent_method_id: undefined
-						};
-						
-						array_push(class_info.method_ids, method_info.method_id);
-						array_push(methods, method_info);
+						var methodInfo = new GMLCMethodInfo(classVarName, classVarValue);
+						array_push(classInfo.methodIDs, methodInfo.methodID);
+						array_push(methods, methodInfo);
 					}
 				}
 				
-				array_push(classes, class_info);
-				delete class_inst;
+				array_push(classes, classInfo);
+				delete classInst;
 			}
 		}
 	}
 	
-	var classes_num = array_length(classes);
-	var methods_num = array_length(methods);
+	var classesNum = array_length(classes);
+	var methodsNum = array_length(methods);
 	
 	// init private gmlc structures
-	var classes_max_id = 1;
-	for(var i=0; i<classes_num; i++)
+	var classesMaxID = 1;
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
-		if(class_info.class_id > classes_max_id)
+		var classInfo = classes[i];
+		if(classInfo.classID > classesMaxID)
 		{
-			classes_max_id = class_info.class_id;
+			classesMaxID = classInfo.classID;
 		}
 	}
 	
-	var methods_max_id = 1;
-	for(var i=0; i<methods_num; i++)
+	var methodsMaxID = 1;
+	for(var i=0; i<methodsNum; i++)
 	{
-		var method_info = methods[i];
-		if(method_info.method_id > methods_max_id)
+		var methodInfo = methods[i];
+		if(methodInfo.methodID > methodsMaxID)
 		{
-			methods_max_id = method_info.method_id;
+			methodsMaxID = methodInfo.methodID;
 		}
 	}
 	
-	global.__gmlc_methods_id_offset_gvar = os_browser==browser_not_a_browser ? __gmlc_methods_id_offset : __gmlc_methods_id_offset_html5;
-	global.__gmlc_classes = array_create(classes_max_id + 1 - __gmlc_classes_id_offset, undefined);
-	global.__gmlc_methods = array_create(methods_max_id + 1 - global.__gmlc_methods_id_offset_gvar, undefined);
+	GMLC.methodsIDOffset = os_browser==browser_not_a_browser ? GMLC.methodsIDOffsetDefault : GMLC.methodsIDOffsetDefaultHTML5;
+	GMLC.classes = array_create(classesMaxID + 1 - GMLC.classesIDOffset, undefined);
+	GMLC.methods = array_create(methodsMaxID + 1 - GMLC.methodsIDOffset, undefined);
 	
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
 		__gmlc_register_class_info(classes[i]);
 	}
 	
-	for(var i=0; i<methods_num; i++)
+	for(var i=0; i<methodsNum; i++)
 	{
 		__gmlc_register_method_info(methods[i]);
 	}
 	
 	// check parents are ok
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
-		var parent_id = class_info.parent_id;
-		if(parent_id!=undefined)
+		var classInfo = classes[i];
+		var parentClassID = classInfo.parentClassID;
+		if(parentClassID!=undefined)
 		{
-			var parent_info = __gmlc_get_class_info(parent_id);
-			if(parent_info==undefined)
+			var parentClassInfo = __gmlc_get_class_info(parentClassID);
+			if(parentClassInfo==undefined)
 			{
-				throw("\nError in '"+class_info.class_name+"' definition.\nParent was not defined!");
+				throw("\nError in '"+classInfo.className+"' definition.\nParent was not defined!");
 			}
 		}
 	}
 	
 	// link parent methods
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
+		var classInfo = classes[i];
 		
-		var method_ids = class_info.method_ids;
-		var method_num = array_length(method_ids);
+		var methodIDs = classInfo.methodIDs;
+		var methodNum = array_length(methodIDs);
 		
-		for(var j=0; j<method_num; j++)
+		for(var j=0; j<methodNum; j++)
 		{
-			var method_id = method_ids[j];
-			var method_info = __gmlc_get_method_info(method_id);
+			var methodID = methodIDs[j];
+			var methodInfo = __gmlc_get_method_info(methodID);
 			
-			var parent_id = class_info.parent_id;
-			while(parent_id!=undefined && method_info.parent_method_id==undefined)
+			var parentClassID = classInfo.parentClassID;
+			while(parentClassID!=undefined && methodInfo.parentMethodID==undefined)
 			{
-				var parent_class_info = __gmlc_get_class_info(parent_id);
-
-				var parent_method_ids = parent_class_info.method_ids;
-				var parent_method_num = array_length(parent_method_ids);
-				for(var k=0; k<parent_method_num; k++)
+				var parentClassInfo = __gmlc_get_class_info(parentClassID);
+				
+				var parentMethodIDs = parentClassInfo.methodIDs;
+				var parentMethodNum = array_length(parentMethodIDs);
+				for(var k=0; k<parentMethodNum; k++)
 				{
-					var parent_method_id = parent_method_ids[k];
-					var parent_method_info = __gmlc_get_method_info(parent_method_id);
-					if(parent_method_info!=undefined)
+					var parentMethodID = parentMethodIDs[k];
+					var parentMethodInfo = __gmlc_get_method_info(parentMethodID);
+					if(parentMethodInfo!=undefined)
 					{
-						if(method_info.method_name==parent_method_info.method_name)
+						if(methodInfo.methodName==parentMethodInfo.methodName)
 						{
-							if(method_id!=parent_method_id)
+							if(methodID!=parentMethodID)
 							{
-								method_info.parent_method_id = parent_method_id;
+								methodInfo.parentMethodID = parentMethodID;
 							}
 							else
 							{
@@ -240,30 +296,30 @@ function __gmlc_init_classes()
 					}
 				}
 					
-				parent_id = parent_class_info.parent_id;
+				parentClassID = parentClassInfo.parentClassID;
 			}
 		}
 	}
 	
 	// assign constructor end destructor
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
+		var classInfo = classes[i];
 		
-		var method_ids = class_info.method_ids;
-		var methods_num = array_length(method_ids);
-		for(var j=0; j<methods_num; j++)
+		var methodIDs = classInfo.methodIDs;
+		var n = array_length(methodIDs);
+		for(var j=0; j<n; j++)
 		{
-			var method_id = method_ids[j];
-			var method_info = __gmlc_get_method_info(method_id);
+			var methodID = methodIDs[j];
+			var methodInfo = __gmlc_get_method_info(methodID);
 			
-			if(method_info.method_name==__gmlc_constructor_name)
+			if(methodInfo.methodName==GMLC.constructorName)
 			{
-				class_info.constructor_method_id = method_info.method_id;
+				classInfo.constructorMethodID = methodInfo.methodID;
 			}
-			else if(method_info.method_name==__gmlc_destructor_name)
+			else if(methodInfo.methodName==GMLC.destructorName)
 			{
-				class_info.destructor_method_id = method_info.method_id;
+				classInfo.destructorMethodID = methodInfo.methodID;
 			}
 		}
 	}
@@ -271,40 +327,40 @@ function __gmlc_init_classes()
 	// show registered classes and their methods
 	show_debug_message("\nGML-CLASSES:");
 	
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
+		var classInfo = classes[i];
 		
-		var parent_id = class_info.parent_id;
-		var parent_class_info = undefined;
-		if(parent_id!=undefined)
+		var parentClassID = classInfo.parentClassID;
+		var parentClassInfo = undefined;
+		if(parentClassID!=undefined)
 		{
-			parent_class_info = __gmlc_get_class_info(parent_id);
+			parentClassInfo = __gmlc_get_class_info(parentClassID);
 		}
 		
-		if(parent_class_info==undefined)
+		if(parentClassInfo==undefined)
 		{
-			show_debug_message("\tclass " + class_info.class_name + (class_info.single ? " [singleton]" : "") );
+			show_debug_message("\tclass " + classInfo.className + (classInfo.single ? " [singleton]" : "") );
 		}
 		else
 		{
-			show_debug_message("\tclass " + class_info.class_name + " extends " + parent_class_info.class_name + (class_info.single ? " [singleton]" : "") );
+			show_debug_message("\tclass " + classInfo.className + " extends " + parentClassInfo.className + (classInfo.single ? " [singleton]" : "") );
 		}
 		
-		var method_ids = class_info.method_ids;
-		var methods_num = array_length(method_ids);
-		for(var j=0; j<methods_num; j++)
+		var methodIDs = classInfo.methodIDs;
+		var n = array_length(methodIDs);
+		for(var j=0; j<n; j++)
 		{
-			var method_id = method_ids[j];
-			var method_info = __gmlc_get_method_info(method_id);
+			var methodID = methodIDs[j];
+			var methodInfo = __gmlc_get_method_info(methodID);
 			
-			if(method_info.parent_method_id==undefined)
+			if(methodInfo.parentMethodID==undefined)
 			{
-				show_debug_message("\t\t+ " + method_info.method_name);
+				show_debug_message("\t\t+ " + methodInfo.methodName);
 			}
 			else
 			{
-				show_debug_message("\t\t* " + method_info.method_name);
+				show_debug_message("\t\t* " + methodInfo.methodName);
 			}
 		}
 		
@@ -312,13 +368,13 @@ function __gmlc_init_classes()
 	}
 	
 	show_debug_message("GML-CLASSES init singletons:");
-	for(var i=0; i<classes_num; i++)
+	for(var i=0; i<classesNum; i++)
 	{
-		var class_info = classes[i];
-		if(class_info.single)
+		var classInfo = classes[i];
+		if(classInfo.single)
 		{
-			var globalvarName = class_info.class_name;
-			var singletonInst = create(class_info.class_id);
+			var globalvarName = classInfo.className;
+			var singletonInst = create(classInfo.classID);
 			variable_global_set(globalvarName, singletonInst);
 			show_debug_message("\t" + globalvarName);
 		}
@@ -328,21 +384,24 @@ function __gmlc_init_classes()
 
 #endregion
 
-/// @function				create(class_id, [args0..arg7]);
-/// @description			This function creates an instance of class and returns it.
-/// @param class_id			The unique class ID.
-/// @param [arg0..arg7]		Constructor arguments.
-function create(class_id)
+#region gmlc_functions
+
+/// @description                                     This function creates an instance of class and returns it.
+/// @param {Asset.GMScript,Function,Real} classID    The unique class ID.
+/// @returns {Struct}
+/// @self any
+function create(classID)
 {
-	var class_info = __gmlc_get_class_info(class_id);
-	var constructor_id = class_info.constructor_method_id;
+	var classInfo = __gmlc_get_class_info(classID);
+	var constructorMethodID = classInfo.constructorMethodID;
 	
-	var inst = new class_id();
-	inst.__class_id = class_id;
-	if(constructor_id!=undefined)
+	//var inst = new classID();
+	var inst = __gmlc_create_inst(classID);
+	inst.gmlcCLASS = classID;
+	if(constructorMethodID!=undefined)
 	{
-		var constructor_func = __gmlc_get_method_info(constructor_id).method_func;
-		var c = method(inst, constructor_func);
+		var constructorFunc = __gmlc_get_method_info(constructorMethodID).methodFunc;
+		var c = method(inst, constructorFunc);
 		with(inst)
 		{
 			switch(argument_count)
@@ -363,19 +422,18 @@ function create(class_id)
 	return inst;
 }
 
-/// @function				destroy(inst, [args0..arg7]);
-/// @description			With this function you can destroy the class instance.
-/// @param inst				The unique class instance ID.
-/// @param [arg0..arg7]		Destructor arguments.
+/// @description            With this function you can destroy the class instance.
+/// @param {Struct} inst    The unique class instance ID.
+/// @self any
 function destroy(inst)
 {
-	var class_info = __gmlc_get_class_info(inst.__class_id);
-	var destructor_id = class_info.destructor_method_id;
+	var classInfo = __gmlc_get_class_info(inst.gmlcCLASS);
+	var destructorMethodID = classInfo.destructorMethodID;
 
-	if(destructor_id!=undefined)
+	if(destructorMethodID!=undefined)
 	{
-		var destructor_func = __gmlc_get_method_info(destructor_id).method_func;
-		var d = method(inst, destructor_func);
+		var destructorFunc = __gmlc_get_method_info(destructorMethodID).methodFunc;
+		var d = method(inst, destructorFunc);
 		with(inst)
 		{
 			switch(argument_count)
@@ -396,24 +454,25 @@ function destroy(inst)
 	delete inst;
 }
 
-/// @function				super(method_func, [args0..arg7]);
-/// @description			This function calls the parent method.
-/// @param method_func		The method to call.
-/// @param [arg0..arg7]		Method arguments.
-function super(method_func)
+/// @description                    This function calls the parent method.
+/// @param {Function} methodFunc    The method to call.
+/// @returns {Any}
+/// @self any
+function super(methodFunc)
 {
 	var result = undefined;
 	
-	var method_id = method_get_index(method_func);
-	var method_info = __gmlc_get_method_info(method_id);
+	var methodID = method_get_index(methodFunc);
+	var methodInfo = __gmlc_get_method_info(methodID);
 	
-	if(method_info!=undefined && method_info.parent_method_id!=undefined)
+	if(methodInfo!=undefined && methodInfo.parentMethodID!=undefined)
 	{
-		var method_save = variable_struct_get(self, method_info.method_name);
+		var this = __gmlc_self_struct(); // self
+		var methodSave = variable_struct_get(this, methodInfo.methodName);
 		
-		var parent_method_info = __gmlc_get_method_info(method_info.parent_method_id);
-		variable_struct_set(self, method_info.method_name, parent_method_info.method_func);
-		var pm = method(self, parent_method_info.method_func);
+		var parentMethodInfo = __gmlc_get_method_info(methodInfo.parentMethodID);
+		variable_struct_set(this, methodInfo.methodName, parentMethodInfo.methodFunc);
+		var pm = method(this, parentMethodInfo.methodFunc);
 		
 		switch(argument_count)
 		{ 
@@ -428,87 +487,154 @@ function super(method_func)
 			case 9: result = pm(argument[1], argument[2], argument[3], argument[4], argument[5], argument[6], argument[7], argument[8]); break;
 		}
 		
-		variable_struct_set(self, method_info.method_name, method_save);
+		variable_struct_set(this, methodInfo.methodName, methodSave);
 	}
 	
 	return result;
 }
 
-/// @function				cast(inst, class_id);
-/// @description			With this function you can check if an instance is inherited from a given class.
-/// @param inst				The unique class instance ID.
-/// @param class_id			The unique class ID.
-function cast(inst, class_id)
+/// @description                         With this function you can check if an instance is inherited from a given class.
+/// @param {Struct,Id.Instance} inst    The unique class instance ID.
+/// @param {Asset.GMScript} classID      The unique class ID.
+/// @returns {Bool}
+/// @self any
+function cast(inst, classID)
 {
-	if(inst.__class_id==class_id)
+	if(inst.gmlcCLASS==classID)
 	{
 		return true;
 	}
 	
-	var class_info = __gmlc_get_class_info(inst.__class_id);
-	var parent_id = class_info.parent_id;
-	while(parent_id!=undefined)
+	var classInfo = __gmlc_get_class_info(inst.gmlcCLASS);
+	var parentClassID = classInfo.parentClassID;
+	while(parentClassID!=undefined)
 	{
-		if(parent_id==class_id)
+		if(parentClassID==classID)
 		{
 			return true;
 		}
 		
-		var parent_class_info = __gmlc_get_class_info(parent_id);
-		parent_id = parent_class_info.parent_id;
+		var parentClassInfo = __gmlc_get_class_info(parentClassID);
+		parentClassID = parentClassInfo.parentClassID;
 	}
 	
 	return false;
 }
 
-/// @function				is_class(val);
-/// @description			This function checks if the supplied value is a class.
-/// @param val				The value to check.
+/// @description        This function checks if the supplied value is a class.
+/// @param {Any} val    The value to check.
+/// @returns {Bool}
+/// @self any
 function is_class(val)
 {
 	return ( is_real(val)
-		&& val >= __gmlc_classes_id_offset
-		&& val < __gmlc_classes_id_offset + array_length(global.__gmlc_classes)
-		&&  __gmlc_get_class_info(val) != undefined
+		&& val >= GMLC.classesIDOffset
+		&& val < GMLC.classesIDOffset + array_length(GMLC.classes)
+		&& __gmlc_get_class_info(val) != undefined
 	);
 }
 
-/// @function				class_get_name(class_id);
-/// @description			This function returns the class name (as a string) by a given class ID.
-/// @param class_id			The unique class ID.
-function class_get_name(class_id)
+/// @description        This function checks if the supplied value is a class instance.
+/// @param {Any} val    The value to check.
+/// @returns {Bool}
+/// @self any
+function is_class_inst(val)
 {
-	var class_info = __gmlc_get_class_info(class_id);
-	if(class_info!=undefined)
+	return ( is_struct(val)
+		&& variable_struct_exists(val, "gmlcCLASS")
+	);
+}
+
+/// @description                       This function returns the class name (as a string) of a given class.
+/// @param {Asset.GMScript} classID    The unique class ID.
+/// @returns {String}
+/// @self any
+function class_get_name(classID)
+{
+	var classInfo = __gmlc_get_class_info(classID);
+	if(classInfo!=undefined)
 	{
-		return class_info.class_name;
+		return classInfo.className;
+	}
+	return "";
+}
+
+/// @description                       This function returns all method names of class (as array of string) of a given class.
+/// @param {Asset.GMScript} classID    The unique class ID.
+/// @returns {Array<Any>,Undefined}
+/// @self any
+function class_get_method_names(classID)
+{
+	var classInfo = __gmlc_get_class_info(classID);
+	if(classInfo!=undefined)
+	{
+		var arr = [];
+		var methodIDs = classInfo.methodIDs;
+		var n = array_length(methodIDs);
+		for(var i=0; i<n; i++)
+		{
+			var methodInfo = __gmlc_get_method_info(methodIDs[i]);
+			array_push(arr, methodInfo.methodName);
+		}
+		return arr;
 	}
 	return undefined;
 }
 
-/// @function				find_class_by_name(class_name);
-/// @description			With this function you can get the class ID by its name.
-/// @param class_name		The class name as a string.
-function find_class_by_name(class_name)
+/// @description                       This function returns true if class has a given method.
+/// @param {Asset.GMScript} classID    The unique class ID.
+/// @param {String} methodName         The method name as a string.
+/// @returns {Bool}
+/// @self any
+function class_has_method(classID, methodName)
 {
-	gml_pragma("forceinline");
-	return global.__gmcs_class_name_to_class_id[? class_name];
+	var arr = class_get_method_names(classID);
+	if(arr!=undefined)
+	{
+		var n = array_length(arr);
+		for(var i=0; i<n; i++)
+		{
+			if(arr[i]==methodName)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
-/// @function				inst_get_class(inst);
-/// @description			With this function you can get class ID of a given class instance.
-/// @param inst				The unique class instance ID.
+/// @description                 With this function you can get the class ID by its name.
+/// @param {String} className    The class name as a string.
+/// @returns {Asset.GMScript,Undefined}
+/// @self any
+function find_class_by_name(className)
+{
+	gml_pragma("forceinline");
+	return GMLC.classNameToClassID[? className];
+}
+
+/// @description                        With this function you can get class ID of a given class instance.
+/// @param {Struct,Id.Instance} inst    The unique class instance ID.
+/// @returns {Asset.GMScript,Undefined,Any}
+/// @self any
 function inst_get_class(inst)
 {
-	gml_pragma("forceinline");
-	return inst.__class_id;
+	if(is_class_inst(inst))
+	{
+		return inst.gmlcCLASS;
+	}
+	return undefined;
 }
 
-/// @function				inst_get_class_name(inst);
-/// @description			This function returns the class name (as a string) of a given class instance.
-/// @param inst				The unique class instance ID.
+/// @description                        This function returns the class name (as a string) of a given class instance.
+/// @param {Struct,Id.Instance} inst    The unique class instance ID.
+/// @returns {String}
+/// @self any
 function inst_get_class_name(inst)
 {
 	gml_pragma("forceinline");
-	return class_get_name(inst.__class_id);
+	return class_get_name(inst.gmlcCLASS);
 }
+
+#endregion
+
