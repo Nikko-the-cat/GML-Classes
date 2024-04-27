@@ -1,11 +1,13 @@
 {
-  "resourceType": "GMScript",
-  "resourceVersion": "1.0",
-  "name": "gml_classes",
-  "isCompatibility": false,
-  "isDnD": false,
-  "parent": {
-    "name": "Scripts",
-    "path": "folders/Scripts.yy",
+  "$GMScript":"",
+  "%Name":"gml_classes",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"gml_classes",
+  "parent":{
+    "name":"_Libs",
+    "path":"folders/_05_Scripts/_Libs.yy",
   },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
 }

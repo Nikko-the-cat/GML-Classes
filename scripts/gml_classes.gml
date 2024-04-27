@@ -1,7 +1,8 @@
-// GML-Classes v1.1.0
+// GML-Classes v1.1.5
+// Game Maker Runtime: v2024.2.163
 // This script provides some OOP functionality that allows you to define classes,
 // their constructor and destructor, and call parent methods in overridden methods.
-// Developed by NikkoTC 2023.
+// Developed by NikkoTC 2024.
 // Documentation: https://github.com/Nikko-the-cat/GML-Classes/wiki
 
 // Set this macro to "false" if you don't want to see registered classes in the output window.
@@ -12,7 +13,7 @@
 #macro class __gmlc_keyword_class()[array_length(__gmlc_keyword_class())]=function
 #macro extends ():
 #macro define ()constructor
-#macro super __gmlc_super[$ __gmlc_funcname_to_classname(_GMFUNCTION_)]
+#macro super __gmlc_super[$ __gmlc_funcname_to_classname(_GMFUNCTION_, _GMFILE_)]
 
 /// @ignore
 /// @returns {Array}
@@ -31,18 +32,14 @@ function __gmlc_syntax_highlights()
 
 /// @ignore
 /// @param {String} funcname
-function __gmlc_funcname_to_classname(funcname)
+/// @param {String} file
+function __gmlc_funcname_to_classname(funcname, file)
 {
+	static fileBaseLen = string_length("gml_GlobalScript_") - 1;
+	var fileLen = string_length(file) - fileBaseLen;
 	var n = string_length(funcname);
-	var i = 5; // "anon_"
-	while(i<n)
-	{
-		if(string_char_at(funcname, ++i)=="_")
-		{
-			return string_delete(funcname, 1, i + (n+1-i)/2);
-		}
-	}
-	return funcname;
+	var i = string_last_pos_ext("@", funcname, n - fileLen);
+	return string_copy(funcname, i+1, (n-i) - fileLen);
 }
 
 /// @ignore
@@ -53,6 +50,35 @@ function __gmlc_struct()
 		classNames: []
 	};
 	return struct;
+}
+
+/// @ignore
+function __gmlc_link_parent_methods(classInfo)
+{
+	var parentInfo = classInfo.parentInfo;
+	
+	var parentMethodNames = parentInfo.methodNames;
+	var parentMethodNamesNum = array_length(parentMethodNames);
+	for(var i=0; i<parentMethodNamesNum; i++)
+	{
+		var parentMethodName = parentMethodNames[i];
+		if(!array_contains(classInfo.methodNames, parentMethodName))
+		{
+			var value = struct_get(parentInfo.methods, parentMethodName);
+			struct_set(classInfo.methods, parentMethodName, value);
+			array_push(classInfo.methodNames, parentMethodName);
+		}
+	}
+	
+	var children = classInfo.children;
+	if(children!=undefined)
+	{
+		var childrenNum = array_length(children);
+		for(var i=0; i<childrenNum; i++)
+		{
+			__gmlc_link_parent_methods(children[i]);
+		}
+	}
 }
 
 /// @ignore
@@ -76,6 +102,7 @@ function __gmlc_init()
 			if(classInfo==undefined)
 			{
 				classInfo = {};
+				classInfo.children = undefined;
 				__gmlc_struct().classInfos[$ className] = classInfo;
 			}
 			
@@ -84,36 +111,19 @@ function __gmlc_init()
 			{
 				var name = instanceof(static_get(classInst));
 				parentName = name!="Object" ? name : undefined;
-				// Unfortunately, the class name "Object" will have to be avoided.
+				// Unfortunately, the class name "Object" must have to be avoided.
 			}
 			else
 			{
-				// HTML5. This solution for getting the parent's name is terrible, but it seems to be the only way.
-				var str = string(static_get(static_get(classInst)));
-				static constructorSubstr = "constructor : ";
-				var pos = string_pos(constructorSubstr, str);
-				if(pos!=0)
-				{
-					var digits = "";
-					var k = pos + string_length(constructorSubstr);
-					var c = string_char_at(str, k);
-					while(c==string_digits(c))
-					{
-						digits += c;
-						c = string_char_at(str, ++k);
-					}
-					
-					if(digits!="")
-					{
-						parentName = script_get_name(real(digits));
-					}
-				}
+				var p = static_get(static_get(classInst));
+				parentName = p ? instanceof(p) : undefined;
 			}
 			
 			var parentInfo = parentName!=undefined ? __gmlc_struct().classInfos[$ parentName] : undefined;
 			if(parentName!=undefined && parentInfo==undefined)
 			{
 				parentInfo = {};
+				parentInfo.children = [];
 				__gmlc_struct().classInfos[$ parentName] = parentInfo;
 			}
 			
@@ -123,6 +133,28 @@ function __gmlc_init()
 			classInfo.parentInfo = parentInfo;
 			classInfo.methodNames = [];
 			classInfo.methods = {};
+			if(parentInfo!=undefined)
+			{
+				if(parentInfo.children==undefined)
+				{
+					parentInfo.children = [];
+				}
+				array_push(parentInfo.children, classInfo);
+			}
+			
+			var staticStruct = static_get(classInst);
+			var staticVarNames = struct_get_names(staticStruct);
+			var staticVarNamesNum = array_length(staticVarNames);
+			for(var j=0; j<staticVarNamesNum; j++)
+			{
+				var classVarName = staticVarNames[j];
+				var classVarValue = struct_get(staticStruct, classVarName);
+				if(is_method(classVarValue))
+				{
+					struct_set(classInfo.methods, classVarName, classVarValue);
+					array_push(classInfo.methodNames, classVarName);
+				}
+			}
 			
 			var classVarNames = struct_get_names(classInst);
 			var classVarNamesNum = array_length(classVarNames);
@@ -141,6 +173,29 @@ function __gmlc_init()
 		}
 	}
 	
+	var classNamesArr = __gmlc_struct().classNames;
+	var classesNum = array_length(classNamesArr);
+	
+	// link parent methods
+	for(var i=0; i<classesNum; i++)
+	{
+		var className = classNamesArr[i];
+		var classInfo = classInfos[$ className];
+		
+		if(classInfo.parentInfo==undefined)
+		{
+			var children = classInfo.children;
+			if(children!=undefined)
+			{
+				var childrenNum = array_length(children);
+				for(var j=0; j<childrenNum; j++)
+				{
+					__gmlc_link_parent_methods(children[j]);
+				}
+			}
+		}
+	}
+	
 	if(!gml_classes_debug)
 	{
 		return;
@@ -148,8 +203,7 @@ function __gmlc_init()
 	
 	// Show registered classes and their methods.
 	show_debug_message("\nGML-CLASSES:");
-	var classNamesArr = __gmlc_struct().classNames;
-	var classesNum = array_length(classNamesArr);
+	
 	for(var i=0; i<classesNum; i++)
 	{
 		var className = classNamesArr[i];
@@ -221,7 +275,10 @@ function create(classID)
 			arr[i] = argument[i];
 			i++;
 		}
-		method_call(c, arr, 1);
+		with(inst)
+		{
+			method_call(c, arr, 1);
+		}
 	}
 	
 	return inst;
@@ -243,7 +300,10 @@ function destroy(inst)
 			arr[i] = argument[i];
 			i++;
 		}
-		method_call(d, arr, 1);
+		with(inst)
+		{
+			method_call(d, arr, 1);
+		}
 	}
 	
 	delete inst;
