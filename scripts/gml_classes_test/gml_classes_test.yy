@@ -1,12 +1,12 @@
 {
   "$GMScript":"",
-  "%Name":"gml_classes",
+  "%Name":"gml_classes_test",
   "isCompatibility":false,
   "isDnD":false,
-  "name":"gml_classes",
+  "name":"gml_classes_test",
   "parent":{
-    "name":"_Libs",
-    "path":"folders/_05_Scripts/_Libs.yy",
+    "name":"Scripts",
+    "path":"folders/Scripts.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

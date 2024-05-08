@@ -1,0 +1,13 @@
+{
+  "$GMScript":"",
+  "%Name":"gml_classes_performance_test",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"gml_classes_performance_test",
+  "parent":{
+    "name":"Scripts",
+    "path":"folders/Scripts.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

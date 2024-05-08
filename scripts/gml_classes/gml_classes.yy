@@ -1,0 +1,13 @@
+{
+  "$GMScript":"",
+  "%Name":"gml_classes",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"gml_classes",
+  "parent":{
+    "name":"Scripts",
+    "path":"folders/Scripts.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

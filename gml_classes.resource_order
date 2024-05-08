@@ -1,0 +1,8 @@
+{
+  "FolderOrderSettings":[],
+  "ResourceOrderSettings":[
+    {"name":"gml_classes_test","order":1,"path":"scripts/gml_classes_test/gml_classes_test.yy",},
+    {"name":"gml_classes","order":2,"path":"scripts/gml_classes/gml_classes.yy",},
+    {"name":"gml_classes_performance_test","order":3,"path":"scripts/gml_classes_performance_test/gml_classes_performance_test.yy",},
+  ],
+}
